@@ -68,28 +68,27 @@ func (f *Filler) SetDefaultValues(fields []*FieldData) {
 
 func (f *Filler) isEmpty(field *FieldData) bool {
 	switch field.Value.Kind() {
+	case reflect.Bool:
+		return !field.Value.Bool()
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		return field.Value.Int() == 0
+	case reflect.Float32, reflect.Float64:
+		return field.Value.Float() == .0
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		return field.Value.Uint() == 0
 	case reflect.Slice:
 		switch field.Value.Type().Elem().Kind() {
 		case reflect.Struct:
 			// always assume the structs in the slice is empty and can be filled
 			// the actually struct filling logic should take care of the rest
 			return true
-
-		case reflect.Ptr:
-			switch field.Value.Type().Elem().Elem().Kind() {
-			case reflect.Struct:
-				return true
-			default:
-				return field.Value.Len() == 0
-			}
+		default:
+			return field.Value.Len() == 0
 		}
-	case reflect.Ptr:
-		if field.Value.Type().Elem().Kind() == reflect.Struct {
-			return true
-		}
-		return field.Value.IsNil()
+	case reflect.String:
+		return field.Value.String() == ""
 	}
-	return field.Value.IsZero()
+	return true
 }
 
 func (f *Filler) SetDefaultValue(field *FieldData) {
