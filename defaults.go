@@ -87,10 +87,25 @@ func newDefaultFiller() *Filler {
 		getDefaultFiller().SetDefaultValues(fields)
 	}
 
-	types := make(map[TypeHash]FillerFunc, 1)
-	types["time.Duration"] = func(field *FieldData) {
-		d, _ := time.ParseDuration(field.TagValue)
-		field.Value.Set(reflect.ValueOf(d))
+	funcs[reflect.Ptr] = func(field *FieldData) {
+		k := field.Value.Type().Elem().Kind()
+		if k != reflect.Struct && k != reflect.Slice && k != reflect.Ptr && field.TagValue == "" {
+			return
+		}
+		if field.Value.IsNil() {
+			v := reflect.New(field.Value.Type().Elem())
+			field.Value.Set(v)
+		}
+		elemField := &FieldData{
+			Value: field.Value.Elem(),
+			Field: reflect.StructField{
+				Type: field.Field.Type.Elem(),
+				Tag:  field.Field.Tag,
+			},
+			TagValue: field.TagValue,
+			Parent:   nil,
+		}
+		funcs[field.Value.Elem().Kind()](elemField)
 	}
 
 	funcs[reflect.Slice] = func(field *FieldData) {
@@ -105,6 +120,16 @@ func newDefaultFiller() *Filler {
 			count := field.Value.Len()
 			for i := 0; i < count; i++ {
 				fields := getDefaultFiller().GetFieldsFromValue(field.Value.Index(i), nil)
+				getDefaultFiller().SetDefaultValues(fields)
+			}
+		case reflect.Ptr:
+			count := field.Value.Len()
+			for i := 0; i < count; i++ {
+				if field.Value.Index(i).IsZero() {
+					newValue := reflect.New(field.Value.Index(i).Type().Elem())
+					field.Value.Index(i).Set(newValue)
+				}
+				fields := getDefaultFiller().GetFieldsFromValue(field.Value.Index(i).Elem(), nil)
 				getDefaultFiller().SetDefaultValues(fields)
 			}
 		default:
@@ -131,6 +156,16 @@ func newDefaultFiller() *Filler {
 				}
 				field.Value.Set(result)
 			}
+		}
+	}
+
+	types := make(map[TypeHash]FillerFunc, 1)
+	types["time.Duration"] = func(field *FieldData) {
+		d, _ := time.ParseDuration(field.TagValue)
+		if field.Value.Kind() == reflect.Ptr {
+			field.Value.Set(reflect.ValueOf(&d))
+		} else {
+			field.Value.Set(reflect.ValueOf(d))
 		}
 	}
 
